@@ -196,3 +196,4 @@ Icon
 
 # Thumbnails
 ._*
+.DS_Store

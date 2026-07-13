@@ -335,7 +335,6 @@ function renderCategoria(rows, sedesEnFiltro) {
 
 function renderHeatmap(rows, sedesEnFiltro) {
   const div = document.getElementById('fig-heatmap');
-  if (sedesEnFiltro.length <= 1) { Plotly.purge(div); div.style.display = 'none'; return; }
   div.style.display = 'block';
 
   const cats = unico(rows.map(r => r['Category Name']));
@@ -353,9 +352,12 @@ function renderHeatmap(rows, sedesEnFiltro) {
   });
   const z = catsOrdenadas.map(c => matrizPorCat[c]);
   const texto = z.map(fila => fila.map(v => v === null ? '' : v.toFixed(1)));
+  const valoresValidos = z.flat().filter(v => v !== null);
+  const zmax = Math.max(60, ...valoresValidos);
 
   Plotly.react('fig-heatmap', [{
     z, x: sedesEnFiltro, y: catsOrdenadas, type: 'heatmap', colorscale: 'RdYlGn',
+    zmin: 0, zmax: zmax,
     text: texto, texttemplate: '%{text}', colorbar: { title: 'Margen %' }
   }], {
     title: 'Mapa de calor — Margen % por Categoría y Sucursal',

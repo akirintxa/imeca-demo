@@ -2,9 +2,15 @@
 Genera un dashboard de ventas como un ÚNICO archivo HTML autocontenido.
 
 Uso:
-    python generar_dashboard.py                       # usa ventas.csv -> dashboard_ventas.html
-    python generar_dashboard.py otro.csv               # CSV distinto -> dashboard_ventas.html
-    python generar_dashboard.py otro.csv salida.html    # CSV y nombre de salida distintos
+    python 2_create_dashboard.py                          # ../stores_data/processed/ventas.csv -> ../reports/dashboard_ventas.html
+    python 2_create_dashboard.py otro.csv                  # CSV distinto -> ../reports/dashboard_ventas.html
+    python 2_create_dashboard.py otro.csv salida.html       # CSV y nombre de salida distintos
+
+Por defecto asume esta estructura de proyecto:
+    proyecto/
+      data_analysis/2_create_dashboard.py       <- este script
+      stores_data/processed/ventas.csv           <- entrada
+      reports/dashboard_ventas.html               <- salida (se crea si no existe)
 
 El archivo .html resultante:
   - Es un dashboard interactivo completo (filtros de sucursal, categoría y
@@ -18,8 +24,14 @@ El archivo .html resultante:
 """
 
 import sys
+import os
 import json
 import pandas as pd
+
+# --- Rutas por defecto, relativas a la ubicación de este script ---
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+CSV_PATH_DEFAULT = os.path.join(SCRIPT_DIR, '..', 'stores_data', 'processed', 'ventas.csv')
+OUTPUT_PATH_DEFAULT = os.path.join(SCRIPT_DIR, '..', 'reports', 'dashboard_ventas.html')
 
 
 def cargar_datos(csv_path: str) -> pd.DataFrame:
@@ -270,22 +282,54 @@ function renderVentasPorMes(rows) {
   }, { displaylogo: false, responsive: true });
 }
 
-function renderCategoria(rows) {
-  const porCat = agrupar(rows, r => r['Category Name'], rs => ({
-    ventas: rs.reduce((s, r) => s + r.Total, 0),
-    margen: rs.reduce((s, r) => s + r.Margen_pct, 0) / rs.length
-  }));
-  const cats = Object.keys(porCat).sort((a, b) => porCat[b].ventas - porCat[a].ventas);
-  const traceBar = { x: cats, y: cats.map(c => porCat[c].ventas), type: 'bar', name: 'Ventas ($)' };
-  const traceLinea = {
-    x: cats, y: cats.map(c => porCat[c].margen), name: 'Margen %', yaxis: 'y2',
-    type: 'scatter', mode: 'lines+markers', line: { color: 'crimson' }
-  };
-  Plotly.react('fig-categoria', [traceBar, traceLinea], {
-    title: 'Ventas por categoría (barras) vs. Margen % promedio (línea)',
-    height: 380, margin: { t: 40, b: 60 },
+function renderCategoria(rows, sedesEnFiltro) {
+  // Orden de categorías: de mayor a menor venta total (combinando todas las sucursales del filtro)
+  const porCatTotal = agrupar(rows, r => r['Category Name'], rs => rs.reduce((s, r) => s + r.Total, 0));
+  const cats = Object.keys(porCatTotal).sort((a, b) => porCatTotal[b] - porCatTotal[a]);
+
+  let traces = [];
+  let titulo = 'Ventas por categoría (barras) vs. Margen % promedio (línea)';
+
+  if (sedesEnFiltro.length > 1) {
+    titulo = 'Ventas por categoría vs. Margen % — comparativo por sucursal';
+
+    sedesEnFiltro.forEach((sede, i) => {
+      const rowsSede = rows.filter(r => r.Sede === sede);
+      const porCat = agrupar(rowsSede, r => r['Category Name'], rs => rs.reduce((s, r) => s + r.Total, 0));
+      const color = COLORES_SEDE[i % COLORES_SEDE.length];
+      traces.push({
+        x: cats, y: cats.map(c => porCat[c] || 0), type: 'bar',
+        name: 'Ventas — ' + sede, marker: { color }, legendgroup: sede
+      });
+    });
+
+    sedesEnFiltro.forEach((sede, i) => {
+      const rowsSede = rows.filter(r => r.Sede === sede);
+      const porCat = agrupar(rowsSede, r => r['Category Name'], rs => rs.reduce((s, r) => s + r.Margen_pct, 0) / rs.length);
+      const color = COLORES_SEDE[i % COLORES_SEDE.length];
+      traces.push({
+        x: cats, y: cats.map(c => porCat[c] !== undefined ? porCat[c] : null), name: 'Margen % — ' + sede,
+        yaxis: 'y2', type: 'scatter', mode: 'lines+markers', legendgroup: sede,
+        line: { color, dash: 'dot' }, marker: { symbol: 'diamond', size: 7 }
+      });
+    });
+  } else {
+    const porCat = agrupar(rows, r => r['Category Name'], rs => ({
+      ventas: rs.reduce((s, r) => s + r.Total, 0),
+      margen: rs.reduce((s, r) => s + r.Margen_pct, 0) / rs.length
+    }));
+    traces = [
+      { x: cats, y: cats.map(c => porCat[c].ventas), type: 'bar', name: 'Ventas ($)' },
+      { x: cats, y: cats.map(c => porCat[c].margen), name: 'Margen %', yaxis: 'y2',
+        type: 'scatter', mode: 'lines+markers', line: { color: 'crimson' } }
+    ];
+  }
+
+  Plotly.react('fig-categoria', traces, {
+    title: titulo, height: 400, margin: { t: 40, b: 60 }, barmode: 'group',
     yaxis: { title: 'Ventas ($)' },
-    yaxis2: { title: 'Margen %', overlaying: 'y', side: 'right' }
+    yaxis2: { title: 'Margen %', overlaying: 'y', side: 'right' },
+    legend: { orientation: 'h', yanchor: 'bottom', y: 1.02, xanchor: 'right', x: 1 }
   }, { displaylogo: false, responsive: true });
 }
 
@@ -354,7 +398,7 @@ function render() {
   const sedesEnFiltro = unico(rows.map(r => r.Sede));
   renderKPI(rows, sede, sedesEnFiltro);
   renderVentasPorMes(rows);
-  renderCategoria(rows);
+  renderCategoria(rows, sedesEnFiltro);
   renderHeatmap(rows, sedesEnFiltro);
   renderComparativo(rows, sedesEnFiltro);
 }
@@ -372,8 +416,10 @@ render();
 
 
 def main():
-    csv_path = sys.argv[1] if len(sys.argv) > 1 else './stores_data/processed/ventas.csv'
-    output_path = sys.argv[2] if len(sys.argv) > 2 else './reports/dashboard_ventas.html'
+    csv_path = sys.argv[1] if len(sys.argv) > 1 else CSV_PATH_DEFAULT
+    output_path = sys.argv[2] if len(sys.argv) > 2 else OUTPUT_PATH_DEFAULT
+
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
     df = cargar_datos(csv_path)
     data_json = registros_para_html(df)

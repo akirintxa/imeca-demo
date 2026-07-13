@@ -230,22 +230,54 @@ function renderVentasPorMes(rows) {
   }, { displaylogo: false, responsive: true });
 }
 
-function renderCategoria(rows) {
-  const porCat = agrupar(rows, r => r['Category Name'], rs => ({
-    ventas: rs.reduce((s, r) => s + r.Total, 0),
-    margen: rs.reduce((s, r) => s + r.Margen_pct, 0) / rs.length
-  }));
-  const cats = Object.keys(porCat).sort((a, b) => porCat[b].ventas - porCat[a].ventas);
-  const traceBar = { x: cats, y: cats.map(c => porCat[c].ventas), type: 'bar', name: 'Ventas ($)' };
-  const traceLinea = {
-    x: cats, y: cats.map(c => porCat[c].margen), name: 'Margen %', yaxis: 'y2',
-    type: 'scatter', mode: 'lines+markers', line: { color: 'crimson' }
-  };
-  Plotly.react('fig-categoria', [traceBar, traceLinea], {
-    title: 'Ventas por categoría (barras) vs. Margen % promedio (línea)',
-    height: 380, margin: { t: 40, b: 60 },
+function renderCategoria(rows, sedesEnFiltro) {
+  // Orden de categorías: de mayor a menor venta total (combinando todas las sucursales del filtro)
+  const porCatTotal = agrupar(rows, r => r['Category Name'], rs => rs.reduce((s, r) => s + r.Total, 0));
+  const cats = Object.keys(porCatTotal).sort((a, b) => porCatTotal[b] - porCatTotal[a]);
+
+  let traces = [];
+  let titulo = 'Ventas por categoría (barras) vs. Margen % promedio (línea)';
+
+  if (sedesEnFiltro.length > 1) {
+    titulo = 'Ventas por categoría vs. Margen % — comparativo por sucursal';
+
+    sedesEnFiltro.forEach((sede, i) => {
+      const rowsSede = rows.filter(r => r.Sede === sede);
+      const porCat = agrupar(rowsSede, r => r['Category Name'], rs => rs.reduce((s, r) => s + r.Total, 0));
+      const color = COLORES_SEDE[i % COLORES_SEDE.length];
+      traces.push({
+        x: cats, y: cats.map(c => porCat[c] || 0), type: 'bar',
+        name: 'Ventas — ' + sede, marker: { color }, legendgroup: sede
+      });
+    });
+
+    sedesEnFiltro.forEach((sede, i) => {
+      const rowsSede = rows.filter(r => r.Sede === sede);
+      const porCat = agrupar(rowsSede, r => r['Category Name'], rs => rs.reduce((s, r) => s + r.Margen_pct, 0) / rs.length);
+      const color = COLORES_SEDE[i % COLORES_SEDE.length];
+      traces.push({
+        x: cats, y: cats.map(c => porCat[c] !== undefined ? porCat[c] : null), name: 'Margen % — ' + sede,
+        yaxis: 'y2', type: 'scatter', mode: 'lines+markers', legendgroup: sede,
+        line: { color, dash: 'dot' }, marker: { symbol: 'diamond', size: 7 }
+      });
+    });
+  } else {
+    const porCat = agrupar(rows, r => r['Category Name'], rs => ({
+      ventas: rs.reduce((s, r) => s + r.Total, 0),
+      margen: rs.reduce((s, r) => s + r.Margen_pct, 0) / rs.length
+    }));
+    traces = [
+      { x: cats, y: cats.map(c => porCat[c].ventas), type: 'bar', name: 'Ventas ($)' },
+      { x: cats, y: cats.map(c => porCat[c].margen), name: 'Margen %', yaxis: 'y2',
+        type: 'scatter', mode: 'lines+markers', line: { color: 'crimson' } }
+    ];
+  }
+
+  Plotly.react('fig-categoria', traces, {
+    title: titulo, height: 400, margin: { t: 40, b: 60 }, barmode: 'group',
     yaxis: { title: 'Ventas ($)' },
-    yaxis2: { title: 'Margen %', overlaying: 'y', side: 'right' }
+    yaxis2: { title: 'Margen %', overlaying: 'y', side: 'right' },
+    legend: { orientation: 'h', yanchor: 'bottom', y: 1.02, xanchor: 'right', x: 1 }
   }, { displaylogo: false, responsive: true });
 }
 
@@ -314,7 +346,7 @@ function render() {
   const sedesEnFiltro = unico(rows.map(r => r.Sede));
   renderKPI(rows, sede, sedesEnFiltro);
   renderVentasPorMes(rows);
-  renderCategoria(rows);
+  renderCategoria(rows, sedesEnFiltro);
   renderHeatmap(rows, sedesEnFiltro);
   renderComparativo(rows, sedesEnFiltro);
 }

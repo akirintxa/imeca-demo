@@ -8,7 +8,12 @@ mes a mes. Todo lo ajustable está en la sección de PARÁMETROS al inicio.
 
 import pandas as pd
 import random
+import os
 from datetime import datetime, timedelta
+
+# --- Ruta de salida: este script vive en stores_data/, los CSV van en stores_data/raw/ ---
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+RAW_DIR = os.path.join(SCRIPT_DIR, 'raw')
 
 # ============================================================
 # PARÁMETROS AJUSTABLES — cambia estos valores para experimentar
@@ -154,7 +159,8 @@ def generar_datos_sucursal(nombre_sucursal, perfil, rng):
             })
 
     df = pd.DataFrame(datos)
-    df.to_csv(f'./stores_data/raw/ventas_{nombre_sucursal}.csv', index=False)
+    os.makedirs(RAW_DIR, exist_ok=True)
+    df.to_csv(os.path.join(RAW_DIR, f'ventas_{nombre_sucursal}.csv'), index=False)
     return df
 
 

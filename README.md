@@ -5,12 +5,21 @@ con soporte para múltiples sucursales.
 
 ## 📁 Estructura del proyecto
 
-| Archivo | Función |
-|---|---|
-| `df_generation.py` | Genera datos de ventas simulados para cada sucursal (`ventas_DEL.csv`, `ventas_PAL.csv`) |
-| `analisis.ipynb` | Une los CSV de cada sucursal, crea la columna `Sede`, calcula márgenes y exporta `ventas_procesadas.csv` |
-| `dashboard_ventas.ipynb` | Dashboard interactivo (filtros por sucursal/categoría/periodo) que consume el CSV procesado |
-| `requirements.txt` | Dependencias del entorno |
+```
+IMECA-DEMO/
+├── data_analysis/
+│   ├── 0_process_data.ipynb     ← une los CSV crudos por sucursal y calcula columnas derivadas
+│   ├── 1_analyse_data.ipynb     ← dashboard interactivo (Jupyter/VS Code)
+│   └── 2_create_dashboard.py    ← exporta el dashboard como un .html autocontenido
+├── stores_data/
+│   ├── data_generation.py       ← genera datos de ventas simulados (opcional)
+│   ├── raw/                     ← CSV crudos por sucursal (ventas_DEL.csv, ventas_PAL.csv)
+│   └── processed/                ← ventas.csv ya unido y listo para analizar
+├── reports/                      ← dashboard_ventas.html generado (para compartir)
+├── tests/                        ← pruebas del proyecto (ver sugerencia abajo)
+├── requirements.txt
+└── README.md
+```
 
 ## ⚙️ Requisitos
 
@@ -34,43 +43,60 @@ pip install -r requirements.txt
 
 ### 3. (Opcional) Generar datos de ejemplo
 
-Si no tienes ya un CSV de ventas, genera datos simulados:
+Si no tienes ya CSV de ventas por sucursal, genera datos simulados:
 
 ```bash
-python df_generation.py
+python stores_data/data_generation.py
 ```
 
-Esto crea `ventas_DEL.csv` y `ventas_PAL.csv` en la carpeta actual.
+Esto crea `stores_data/raw/ventas_DEL.csv` y `stores_data/raw/ventas_PAL.csv`.
 
-> Si ya tienes tu propio archivo procesado (por ejemplo `ventas_procesadas_copy.csv`),
-> puedes saltarte este paso y el siguiente — solo renómbralo a `ventas.csv` y ve directo al paso 5.
+> Si ya tienes tus propios CSV crudos, colócalos en `stores_data/raw/` con el
+> mismo formato de columnas y sáltate este paso.
 
 ### 4. Procesar y unir los datos por sucursal
 
-Abre `analisis.ipynb` en VS Code o Jupyter y ejecuta todas las celdas
-(`Run All`). Esto:
-- Une los CSV de cada sucursal en un solo DataFrame
+Abre `data_analysis/0_process_data.ipynb` en VS Code o Jupyter y ejecuta
+todas las celdas (`Run All`). Esto:
+- Une los CSV de `stores_data/raw/` en un solo DataFrame
 - Crea la columna `Sede` a partir del prefijo de la factura
-- Calcula márgenes y ventas mensuales
-- Exporta el resultado final como `ventas_procesadas.csv`
+- Exporta el resultado como `stores_data/processed/ventas.csv`
 
-### 5. Ejecutar el dashboard interactivo
+### 5. Explorar el dashboard interactivo (Jupyter/VS Code)
 
-1. Renombra o copia el archivo procesado como `ventas.csv` en la misma
-   carpeta que `dashboard_ventas.ipynb` (o edita la variable `CSV_PATH`
-   dentro del notebook si prefieres usar otro nombre).
-2. Abre `dashboard_ventas.ipynb` en VS Code.
-3. Selecciona el kernel de tu entorno virtual (ícono arriba a la derecha).
-4. Ejecuta todas las celdas (`Run All`).
-5. Al final aparecen los controles interactivos — cambia sucursal,
-   categoría o rango de meses y los KPI y gráficas se actualizan solos.
+1. Abre `data_analysis/1_analyse_data.ipynb`.
+2. Selecciona el kernel de tu entorno virtual (ícono arriba a la derecha).
+3. Ejecuta todas las celdas (`Run All`).
+4. Al final aparecen los controles interactivos — cambia sucursal,
+   categoría o periodo y los KPI y gráficas se actualizan solos.
+
+### 6. Generar el dashboard como archivo para compartir
+
+```bash
+cd data_analysis
+python 2_create_dashboard.py
+```
+
+Esto crea `reports/dashboard_ventas.html` — un solo archivo que cualquiera
+puede abrir con doble clic en su navegador, sin instalar Python.
 
 ## ➕ Agregar una nueva sucursal
 
-No hace falta tocar código. Solo agrega las filas de la nueva tienda al
-CSV con su propio valor en la columna `Sede` (por ejemplo `GYE`), y
-vuelve a correr `dashboard_ventas.ipynb` — el filtro de sucursal se llena
-automáticamente a partir de los datos.
+No hace falta tocar código. Agrega el CSV crudo de la tienda nueva en
+`stores_data/raw/`, vuelve a correr `0_process_data.ipynb` y luego
+`1_analyse_data.ipynb` o `2_create_dashboard.py` — el filtro de sucursal
+se llena automáticamente a partir de los datos.
+
+## 🧪 Sobre la carpeta `tests/`
+
+Aún vacía — si el proyecto va a crecer, vale la pena agregar pruebas
+simples para lo que más se rompe al cambiar cosas:
+- Que `stores_data/processed/ventas.csv` tenga las columnas esperadas
+  después de correr `0_process_data.ipynb`.
+- Que `data_generation.py` con una `SEMILLA` fija produzca siempre el
+  mismo número de filas (prueba de regresión simple).
+- Que `2_create_dashboard.py` genere un `.html` no vacío a partir de un
+  CSV de prueba pequeño incluido en `tests/fixtures/`.
 
 ## 🛠️ Problemas comunes
 
@@ -81,3 +107,8 @@ automáticamente a partir de los datos.
   → Revisa si tienes un alias en tu shell (`alias | grep python`) que
   esté pisando el PATH del venv. Bórralo del `.zshrc`/`.bashrc` y abre
   una terminal nueva.
+- **Las gráficas de Plotly aparecen duplicadas en VS Code**
+  → Usa `1_analyse_data.ipynb` tal cual está: las gráficas son
+  `FigureWidget` que se actualizan en el mismo lugar, en vez de volver a
+  dibujarse cada vez (esa combinación es la que causaba duplicados).
+
